@@ -1,213 +1,378 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>3D Dice</title>
+<meta charset="UTF-8">
+<title>AAA Cyberpunk Dice</title>
 
-  <style>
+<style>
     body {
-      margin: 0;
-      overflow: hidden;
-      background: #111;
+        margin: 0;
+        overflow: hidden;
+        background: black;
     }
 
     canvas {
-      display: block;
+        display: block;
     }
-  </style>
+
+    #info {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: cyan;
+        font-family: monospace;
+        z-index: 10;
+    }
+</style>
 </head>
+
 <body>
+
+<div id="info">
+    AAA CYBERPUNK DICE<br>
+    CLICK = THROW DICE
+</div>
 
 <script type="module">
 
+////////////////////////////////////////////////////////////
+// IMPORTS
+////////////////////////////////////////////////////////////
+
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
 
-//////////////////////////////////////////////////
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/OrbitControls.js';
+
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/postprocessing/EffectComposer.js';
+
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/postprocessing/RenderPass.js';
+
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/postprocessing/UnrealBloomPass.js';
+
+import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/exporters/GLTFExporter.js';
+
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+////////////////////////////////////////////////////////////
 // SCENE
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+scene.fog = new THREE.Fog(0x000000, 10, 30);
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 // CAMERA
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
 const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
+    60,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
 );
 
-camera.position.z = 4;
+camera.position.set(0, 5, 10);
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 // RENDERER
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
 const renderer = new THREE.WebGLRenderer({
-  antialias: true
+    antialias: true
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
+
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.4;
+
 document.body.appendChild(renderer.domElement);
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+// POST PROCESSING
+////////////////////////////////////////////////////////////
+
+const composer = new EffectComposer(renderer);
+
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    1.2,
+    0.5,
+    0.2
+);
+
+composer.addPass(bloomPass);
+
+////////////////////////////////////////////////////////////
+// CONTROLS
+////////////////////////////////////////////////////////////
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+////////////////////////////////////////////////////////////
 // LIGHTS
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-scene.add(ambientLight);
+const ambient = new THREE.AmbientLight(0x00ffff, 0.4);
+scene.add(ambient);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 2);
-dirLight.position.set(5, 5, 5);
-scene.add(dirLight);
+const pink = new THREE.PointLight(0xff00ff, 60);
+pink.position.set(5, 10, 5);
+pink.castShadow = true;
+scene.add(pink);
 
-//////////////////////////////////////////////////
-// DICE GEOMETRY
-//////////////////////////////////////////////////
+const cyan = new THREE.PointLight(0x00ffff, 60);
+cyan.position.set(-5, 8, -5);
+scene.add(cyan);
 
-const geometry = new THREE.BoxGeometry(2, 2, 2);
+////////////////////////////////////////////////////////////
+// FLOOR
+////////////////////////////////////////////////////////////
 
-//////////////////////////////////////////////////
-// CREATE TEXTURE FOR EACH FACE
-//////////////////////////////////////////////////
+const floorGeo = new THREE.PlaneGeometry(50, 50);
 
-function createDiceFace(number) {
+const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x050505,
+    metalness: 1,
+    roughness: 0.2
+});
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+const floor = new THREE.Mesh(floorGeo, floorMat);
 
-  const ctx = canvas.getContext('2d');
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
 
-  // background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, 256, 256);
+scene.add(floor);
 
-  // dots
-  ctx.fillStyle = 'black';
+////////////////////////////////////////////////////////////
+// PHYSICS WORLD
+////////////////////////////////////////////////////////////
 
-  const r = 18;
+const world = new CANNON.World({
+    gravity: new CANNON.Vec3(0, -9.82, 0)
+});
 
-  function dot(x, y) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+////////////////////////////////////////////////////////////
+// FLOOR PHYSICS
+////////////////////////////////////////////////////////////
 
-  const positions = {
-    center: [128,128],
-    tl: [64,64],
-    tr: [192,64],
-    bl: [64,192],
-    br: [192,192],
-    ml: [64,128],
-    mr: [192,128]
-  };
+const floorBody = new CANNON.Body({
+    type: CANNON.Body.STATIC,
+    shape: new CANNON.Plane()
+});
 
-  switch(number) {
-    case 1:
-      dot(...positions.center);
-      break;
+floorBody.quaternion.setFromEuler(-Math.PI/2,0,0);
 
-    case 2:
-      dot(...positions.tl);
-      dot(...positions.br);
-      break;
+world.addBody(floorBody);
 
-    case 3:
-      dot(...positions.tl);
-      dot(...positions.center);
-      dot(...positions.br);
-      break;
+////////////////////////////////////////////////////////////
+// CREATE DICE TEXTURES
+////////////////////////////////////////////////////////////
 
-    case 4:
-      dot(...positions.tl);
-      dot(...positions.tr);
-      dot(...positions.bl);
-      dot(...positions.br);
-      break;
+function createFace(number) {
 
-    case 5:
-      dot(...positions.tl);
-      dot(...positions.tr);
-      dot(...positions.center);
-      dot(...positions.bl);
-      dot(...positions.br);
-      break;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
 
-    case 6:
-      dot(...positions.tl);
-      dot(...positions.tr);
-      dot(...positions.ml);
-      dot(...positions.mr);
-      dot(...positions.bl);
-      dot(...positions.br);
-      break;
-  }
+    const ctx = canvas.getContext('2d');
 
-  const texture = new THREE.CanvasTexture(canvas);
+    // futuristic neon background
+    const grad = ctx.createLinearGradient(0,0,512,512);
 
-  return new THREE.MeshStandardMaterial({
-    map: texture
-  });
+    grad.addColorStop(0, '#111');
+    grad.addColorStop(1, '#222');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,512,512);
+
+    // neon border
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 20;
+    ctx.strokeRect(20,20,472,472);
+
+    // glowing dots
+    ctx.fillStyle = '#00ffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 40;
+
+    const r = 35;
+
+    function dot(x,y){
+        ctx.beginPath();
+        ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    const p = {
+        c:[256,256],
+        tl:[128,128],
+        tr:[384,128],
+        bl:[128,384],
+        br:[384,384],
+        ml:[128,256],
+        mr:[384,256]
+    };
+
+    switch(number){
+        case 1: dot(...p.c); break;
+        case 2: dot(...p.tl); dot(...p.br); break;
+        case 3: dot(...p.tl); dot(...p.c); dot(...p.br); break;
+        case 4:
+            dot(...p.tl); dot(...p.tr);
+            dot(...p.bl); dot(...p.br);
+            break;
+        case 5:
+            dot(...p.tl); dot(...p.tr);
+            dot(...p.c);
+            dot(...p.bl); dot(...p.br);
+            break;
+        case 6:
+            dot(...p.tl); dot(...p.tr);
+            dot(...p.ml); dot(...p.mr);
+            dot(...p.bl); dot(...p.br);
+            break;
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+
+    return new THREE.MeshPhysicalMaterial({
+        map: tex,
+        metalness: 1,
+        roughness: 0.1,
+        transmission: 0.05,
+        clearcoat: 1,
+        emissive: new THREE.Color(0x00ffff),
+        emissiveIntensity: 0.3
+    });
 }
 
-//////////////////////////////////////////////////
-// MATERIALS
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+// DICE
+////////////////////////////////////////////////////////////
 
-const materials = [
-  createDiceFace(1),
-  createDiceFace(2),
-  createDiceFace(3),
-  createDiceFace(4),
-  createDiceFace(5),
-  createDiceFace(6)
+const diceGeo = new THREE.BoxGeometry(2,2,2);
+
+const diceMat = [
+    createFace(1),
+    createFace(2),
+    createFace(3),
+    createFace(4),
+    createFace(5),
+    createFace(6)
 ];
 
-//////////////////////////////////////////////////
-// MESH
-//////////////////////////////////////////////////
+const dice = new THREE.Mesh(diceGeo, diceMat);
 
-const dice = new THREE.Mesh(geometry, materials);
+dice.castShadow = true;
+dice.position.y = 5;
+
 scene.add(dice);
 
-//////////////////////////////////////////////////
-// ANIMATION
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+// PHYSICS BODY
+////////////////////////////////////////////////////////////
 
-function animate() {
+const diceBody = new CANNON.Body({
+    mass: 1,
+    shape: new CANNON.Box(new CANNON.Vec3(1,1,1)),
+    position: new CANNON.Vec3(0,5,0)
+});
 
-  requestAnimationFrame(animate);
+world.addBody(diceBody);
 
-  dice.rotation.x += 0.01;
-  dice.rotation.y += 0.01;
+////////////////////////////////////////////////////////////
+// THROW DICE
+////////////////////////////////////////////////////////////
 
-  renderer.render(scene, camera);
+window.addEventListener('click', () => {
+
+    diceBody.velocity.set(
+        (Math.random()-0.5)*10,
+        10,
+        (Math.random()-0.5)*10
+    );
+
+    diceBody.angularVelocity.set(
+        Math.random()*20,
+        Math.random()*20,
+        Math.random()*20
+    );
+});
+
+////////////////////////////////////////////////////////////
+// EXPORT GLTF
+////////////////////////////////////////////////////////////
+
+window.addEventListener('keydown', (e)=>{
+
+    if(e.key === 'e'){
+
+        const exporter = new GLTFExporter();
+
+        exporter.parse(scene, function(result){
+
+            const blob = new Blob(
+                [JSON.stringify(result)],
+                {type:'application/json'}
+            );
+
+            const link = document.createElement('a');
+
+            link.href = URL.createObjectURL(blob);
+            link.download = 'cyberpunk_dice.gltf';
+            link.click();
+        });
+    }
+});
+
+////////////////////////////////////////////////////////////
+// ANIMATION LOOP
+////////////////////////////////////////////////////////////
+
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    world.step(1/60);
+
+    dice.position.copy(diceBody.position);
+    dice.quaternion.copy(diceBody.quaternion);
+
+    controls.update();
+
+    composer.render();
 }
 
 animate();
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 // RESIZE
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
-window.addEventListener('resize', () => {
+window.addEventListener('resize', ()=>{
 
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+    camera.aspect = window.innerWidth/window.innerHeight;
 
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+
+    composer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
 });
 
 </script>
-
 </body>
 </html>
