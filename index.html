@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>3D Dice</title>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<script type="module">
+
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+
+//////////////////////////////////////////////////
+// SCENE
+//////////////////////////////////////////////////
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+//////////////////////////////////////////////////
+// CAMERA
+//////////////////////////////////////////////////
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+camera.position.z = 4;
+
+//////////////////////////////////////////////////
+// RENDERER
+//////////////////////////////////////////////////
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true
+});
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+//////////////////////////////////////////////////
+// LIGHTS
+//////////////////////////////////////////////////
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+dirLight.position.set(5, 5, 5);
+scene.add(dirLight);
+
+//////////////////////////////////////////////////
+// DICE GEOMETRY
+//////////////////////////////////////////////////
+
+const geometry = new THREE.BoxGeometry(2, 2, 2);
+
+//////////////////////////////////////////////////
+// CREATE TEXTURE FOR EACH FACE
+//////////////////////////////////////////////////
+
+function createDiceFace(number) {
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+
+  const ctx = canvas.getContext('2d');
+
+  // background
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // dots
+  ctx.fillStyle = 'black';
+
+  const r = 18;
+
+  function dot(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const positions = {
+    center: [128,128],
+    tl: [64,64],
+    tr: [192,64],
+    bl: [64,192],
+    br: [192,192],
+    ml: [64,128],
+    mr: [192,128]
+  };
+
+  switch(number) {
+    case 1:
+      dot(...positions.center);
+      break;
+
+    case 2:
+      dot(...positions.tl);
+      dot(...positions.br);
+      break;
+
+    case 3:
+      dot(...positions.tl);
+      dot(...positions.center);
+      dot(...positions.br);
+      break;
+
+    case 4:
+      dot(...positions.tl);
+      dot(...positions.tr);
+      dot(...positions.bl);
+      dot(...positions.br);
+      break;
+
+    case 5:
+      dot(...positions.tl);
+      dot(...positions.tr);
+      dot(...positions.center);
+      dot(...positions.bl);
+      dot(...positions.br);
+      break;
+
+    case 6:
+      dot(...positions.tl);
+      dot(...positions.tr);
+      dot(...positions.ml);
+      dot(...positions.mr);
+      dot(...positions.bl);
+      dot(...positions.br);
+      break;
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  return new THREE.MeshStandardMaterial({
+    map: texture
+  });
+}
+
+//////////////////////////////////////////////////
+// MATERIALS
+//////////////////////////////////////////////////
+
+const materials = [
+  createDiceFace(1),
+  createDiceFace(2),
+  createDiceFace(3),
+  createDiceFace(4),
+  createDiceFace(5),
+  createDiceFace(6)
+];
+
+//////////////////////////////////////////////////
+// MESH
+//////////////////////////////////////////////////
+
+const dice = new THREE.Mesh(geometry, materials);
+scene.add(dice);
+
+//////////////////////////////////////////////////
+// ANIMATION
+//////////////////////////////////////////////////
+
+function animate() {
+
+  requestAnimationFrame(animate);
+
+  dice.rotation.x += 0.01;
+  dice.rotation.y += 0.01;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+//////////////////////////////////////////////////
+// RESIZE
+//////////////////////////////////////////////////
+
+window.addEventListener('resize', () => {
+
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+  );
+});
+
+</script>
+
+</body>
+</html>
